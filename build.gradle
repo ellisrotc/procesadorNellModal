@@ -26,8 +26,15 @@ repositories {
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
-	implementation 'com.sikulix:sikulixapi:2.0.5'
-	implementation 'net.sourceforge.tess4j:tess4j:5.11.0'
+	implementation ('com.sikulix:sikulixapi:2.0.5') {
+		exclude group: 'org.slf4j', module: 'slf4j-nop'
+		exclude group: 'org.slf4j', module: 'slf4j-api'
+		exclude group: 'org.apache.logging.log4j', module: 'log4j-slf4j-impl'
+	}
+	implementation ('net.sourceforge.tess4j:tess4j:5.11.0') {
+		exclude group: 'org.slf4j', module: 'slf4j-api'
+		exclude group: 'ch.qos.logback', module: 'logback-classic'
+	}
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	annotationProcessor 'org.projectlombok:lombok'
