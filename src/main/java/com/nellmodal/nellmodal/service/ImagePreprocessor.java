@@ -1,6 +1,5 @@
 package com.nellmodal.nellmodal.service;
 
-import java.awt.Color;
 import java.awt.image.BufferedImage;
 
 public final class ImagePreprocessor {
@@ -9,10 +8,7 @@ public final class ImagePreprocessor {
     }
 
     /**
-     * Converts the image to a black-white mask so red/black digits become pure black on white.
-     *
-     * @param source     original screenshot
-     * @param threshold  0-255 cutoff; lower keeps darker pixels as black
+     * Optimizado para capturar texto rojo y negro sobre fondo claro.
      */
     public static BufferedImage toBinary(BufferedImage source, int threshold) {
         int width = source.getWidth();
@@ -26,11 +22,13 @@ public final class ImagePreprocessor {
                 int g = (rgb >> 8) & 0xFF;
                 int b = rgb & 0xFF;
 
-                // Normalize both red and black digits; use luminance
+                // Si el píxel es predominantemente rojo (como tus números), lo forzamos a negro
+                // O si es oscuro en general (negro)
+                boolean isRed = (r > 150 && g < 100 && b < 100);
                 int gray = (int) (0.299 * r + 0.587 * g + 0.114 * b);
-                int bw = gray < threshold ? 0 : 255;
-                int packed = new Color(bw, bw, bw).getRGB();
-                output.setRGB(x, y, packed);
+                
+                int bit = (isRed || gray < threshold) ? 0 : 1; // 0 = Negro, 1 = Blanco
+                output.getRaster().setSample(x, y, 0, bit);
             }
         }
         return output;

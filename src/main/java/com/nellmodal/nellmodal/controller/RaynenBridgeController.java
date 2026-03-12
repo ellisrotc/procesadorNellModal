@@ -22,7 +22,19 @@ public class RaynenBridgeController {
     @PostMapping("/push")
     public ResponseEntity<Map<String, Object>> push(@RequestBody(required = false) Map<String, String> payload) {
         var normalized = automationService.normalizePayload(payload);
-        automationService.runAutomation(normalized);
+        
+        // Ejecutar la automatización en un hilo separado para no bloquear la respuesta HTTP
+        new Thread(() -> {
+            try {
+                // Pequeña espera para permitir que el cliente reciba la respuesta
+                // y que el usuario ponga la ventana correcta en foco
+                Thread.sleep(1000); 
+                automationService.runAutomation(normalized);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }).start();
+
         return ResponseEntity.accepted().body(Map.of("processed", normalized.size()));
     }
 }
