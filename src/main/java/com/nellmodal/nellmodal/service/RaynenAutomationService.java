@@ -3,24 +3,50 @@ package com.nellmodal.nellmodal.service;
 import lombok.extern.slf4j.Slf4j;
 import org.sikuli.basics.Settings;
 import org.sikuli.script.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.util.*;
-import java.util.concurrent.CountDownLatch;
+import java.io.IOException;
 
 @Slf4j
 @Service
 public class RaynenAutomationService {
+
+    @Value("${raynen.exe-path}")
+    private String raynenExePath;
+
+    @Value("${raynen.window-title}")
+    private String raynenWindowTitle;
 
     private final Screen screen = new Screen();
     private Region raynenWindow = null;
     private int currentPageOffset = 0;
 
     private final String IMG_PATH = "src/main/java/com/nellmodal/nellmodal/fotosReferencia/";
+
+    /**
+     * Intenta enfocar la ventana de Raynen. Si no se puede enfocar (no está abierta),
+     * intenta ejecutar el archivo .exe configurado.
+     */
+    public void ensureAppIsReady() {
+        log.info(">>> ASEGURANDO QUE RAYNEN ESTÉ LISTO...");
+        App app = new App(raynenWindowTitle);
+        if (app.focus() == null) {
+            log.warn(">>> NO SE PUDO ENFOCAR LA VENTANA '{}'. INTENTANDO ABRIR EL PROGRAMA EN '{}'...", raynenWindowTitle, raynenExePath);
+            try {
+                // Ejecuta el archivo .exe de Raynen
+                Runtime.getRuntime().exec(raynenExePath);
+                Thread.sleep(3000); // Esperar unos segundos a que cargue
+                app.focus();
+            } catch (IOException | InterruptedException e) {
+                log.error(">>> ERROR AL INTENTAR ABRIR RAYNEN: ", e);
+            }
+        } else {
+            log.info(">>> VENTANA '{}' ENFOCADA CORRECTAMENTE.", raynenWindowTitle);
+        }
+    }
 
     public Map<Integer, String> normalizePayload(Map<String, String> raw) {
         Map<Integer, String> result = new HashMap<>();
@@ -49,16 +75,18 @@ public class RaynenAutomationService {
 
     private boolean findRaynenWindowVisual() {
         try {
-            // PRIORIDAD 1: Buscar el "1" de la primera fila (1.png)
-            Pattern row1Pattern = new Pattern("1.png").similar(0.6f);
+            // Buscamos el "1" rojo (1.png) con una similitud alta (0.8) para mayor precisión
+            Pattern row1Pattern = new Pattern("1.png").similar(0.8f);
             Match row1 = screen.exists(row1Pattern, 3.0);
             
             if (row1 != null) {
                 log.info(">>> ANCLAJE '1.png' ENCONTRADO EN ({}, {})", row1.x, row1.y);
-                // Si encontramos el "1", definimos la región: 
-                raynenWindow = new Region(row1.x - 20, row1.y - 10, 950, 600);
+                // El "1" ahora es nuestro (0,0). 
+                // Definimos la región de trabajo empezando exactamente ahí.
+                raynenWindow = new Region(row1.x, row1.y, 1000, 700);
                 return true;
             }
+// ... (resto del código de búsqueda si falla el anclaje)
 
             // PRIORIDAD 2: El menú superior (siMenu.png)
             Pattern menuPattern = new Pattern("siMenu.png").similar(0.7f);
@@ -138,6 +166,7 @@ public class RaynenAutomationService {
     }
 
     public void runAutomation(Map<Integer, String> data) {
+        ensureAppIsReady();
         if (!ensureWindowIsSet()) return;
 
         try {
@@ -172,12 +201,16 @@ public class RaynenAutomationService {
                 log.info(">>> FILA {}: ESCRIBIENDO '{}' en ({}, {})", rowNum, val, centerX, targetY);
 
                 Location loc = new Location(centerX, targetY);
-                screen.click(loc);
-                Thread.sleep(200);
-
-                screen.doubleClick(loc);
-                Thread.sleep(300);
                 
+                // 1. Click inicial para asegurar el foco en la celda
+                screen.click(loc);
+                Thread.sleep(150);
+
+                // 2. Doble click para entrar en modo edición (crucial en Raynen)
+                screen.doubleClick(loc);
+                Thread.sleep(250);
+                
+                // 3. Seleccionar todo, borrar y escribir el nuevo valor
                 screen.type("a", KeyModifier.CTRL);
                 Thread.sleep(100);
                 screen.type(Key.BACKSPACE);
