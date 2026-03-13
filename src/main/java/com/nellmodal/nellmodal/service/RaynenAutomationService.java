@@ -8,7 +8,12 @@ import org.springframework.stereotype.Service;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
 @Slf4j
 @Service
@@ -33,7 +38,7 @@ public class RaynenAutomationService {
     public void ensureAppIsReady() {
         log.info(">>> ASEGURANDO QUE RAYNEN ESTÉ LISTO...");
         App app = new App(raynenWindowTitle);
-        if (app.focus() == null) {
+        if (!app.focus()) {
             log.warn(">>> NO SE PUDO ENFOCAR LA VENTANA '{}'. INTENTANDO ABRIR EL PROGRAMA EN '{}'...", raynenWindowTitle, raynenExePath);
             try {
                 // Ejecuta el archivo .exe de Raynen
@@ -61,9 +66,35 @@ public class RaynenAutomationService {
         ImagePath.setBundlePath(new java.io.File(IMG_PATH).getAbsolutePath());
     }
 
+    private boolean setWindowFromApp() {
+        try {
+            App app = new App(raynenWindowTitle);
+            if (app.focus()) {
+                Region win = app.window();
+                if (win != null) {
+                    raynenWindow = win;
+                    log.info(">>> VENTANA '{}' DETECTADA POR TÍTULO EN ({}, {}) TAM {}x{}", raynenWindowTitle, win.x, win.y, win.w, win.h);
+                    return true;
+                }
+            }
+
+            Region focused = App.focusedWindow();
+            if (focused != null) {
+                raynenWindow = focused;
+                log.info(">>> USANDO VENTANA EN FOCO COMO REGIÓN ({}, {}) TAM {}x{}", focused.x, focused.y, focused.w, focused.h);
+                return true;
+            }
+        } catch (Exception e) {
+            log.warn(">>> NO SE PUDO OBTENER LA VENTANA POR TÍTULO: {}", e.getMessage());
+        }
+        return false;
+    }
+
     private boolean ensureWindowIsSet() {
         addImagePath();
         if (raynenWindow != null) return true;
+
+        if (setWindowFromApp()) return true;
         
         log.info(">>> BUSCANDO ANCLAJE (1.png)...");
         if (findRaynenWindowVisual()) return true;
@@ -165,8 +196,16 @@ public class RaynenAutomationService {
         }
     }
 
+    private Location clampToWindow(Location loc) {
+        if (raynenWindow == null) return loc;
+        int x = Math.max(raynenWindow.x, Math.min(loc.x, raynenWindow.x + raynenWindow.w - 1));
+        int y = Math.max(raynenWindow.y, Math.min(loc.y, raynenWindow.y + raynenWindow.h - 1));
+        return new Location(x, y);
+    }
+
     public void runAutomation(Map<Integer, String> data) {
         ensureAppIsReady();
+        log.info(">>> Verifica que la ventana 'Knit param' este activa; el '1' rojo servira como origen (0,0).");
         if (!ensureWindowIsSet()) return;
 
         try {
@@ -200,7 +239,7 @@ public class RaynenAutomationService {
                 int targetY = startY + (i * rowHeight);
                 log.info(">>> FILA {}: ESCRIBIENDO '{}' en ({}, {})", rowNum, val, centerX, targetY);
 
-                Location loc = new Location(centerX, targetY);
+                Location loc = clampToWindow(new Location(centerX, targetY));
                 
                 // 1. Click inicial para asegurar el foco en la celda
                 screen.click(loc);
